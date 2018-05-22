@@ -11,6 +11,13 @@ var budgetController = (function() {
     this.value = value;
   };
 
+  var calculateTotal = function(type) {
+    var sum  = 0;
+    data.allItems[type].forEach(function(curr , i){
+      sum  = sum + curr.value
+    });
+    data.totals[type] = sum;
+  }
   var data = {
     allItems: {
       exp: [],
@@ -39,8 +46,42 @@ var budgetController = (function() {
       }
       data.allItems[type].push(newItem);
       return newItem;
+    },
+    deleteItem: function(id,type) {
+      data.allItems[type] = data.allItems[type].filter(function(obj , i) {
+            return obj.id != id;
+      });
+    },
+    calculateBudget: function() {
+      calculateTotal('exp');
+      calculateTotal('inc');
+
+      data.budget = data.totals.inc - data.totals.exp;
+      if(data.totals.inc > 0){
+        data.percentage = Math.round((data.totals.exp/data.totals.inc) * 100);
+      }
+      else{
+        data.percentage = -1;
+      }
+      
+    },
+    getBudget: function() {
+        return {
+          budget:data.budget,
+          totalinc: data.totals.inc,
+          totalexp: data.totals.exp,
+          totalper: data.percentage
+        }
+    },
+    getPercentage: function() {
+      return data.percentage;
+    },
+    testing: function() {
+      console.log(data);
     }
   };
+  
+
 })();
 
 var uiController = (function() {
@@ -50,25 +91,39 @@ var uiController = (function() {
     inputValue: ".add__value",
     inputButton: ".add__btn",
     incomeList: '.income__list',
-    expenseList: '.expenses__list'
+    expenseList: '.expenses__list',
+    totalbudget: '.budget__value',
+    totalincome: '.budget__income--value',
+    totalexpenses: '.budget__expenses--value',
+    totalpercentage: '.budget__expenses--percentage',
+    container: '.container'
   };
   return {
     getinput: function() {
       return {
         type: document.querySelector(DOMStrings.inputType).value,
         description: document.querySelector(DOMStrings.inputDescription).value,
-        value: document.querySelector(DOMStrings.inputValue).value
+        value: parseFloat(document.querySelector(DOMStrings.inputValue).value)
       };
     },
     getDOMStrings: function() {
       return DOMStrings;
+    },
+    clearFields: function() {
+      var fields;
+
+      fields = document.querySelectorAll(DOMStrings.inputValue + ','+DOMStrings.inputDescription);
+      fields.forEach(function(ele , i , list) {
+        ele.value = '';
+      });
+      fields[0].focus();
     },
     addListItem: function(obj , type) {
       var html , element;
       if (type === 'inc') {
         element = (DOMStrings.incomeList);
         html =
-          `<div class="item clearfix" id="income-${obj.id}"> 
+          `<div class="item clearfix" id="inc-${obj.id}"> 
             <div class="item__description">${obj.description}</div> 
             <div class="right clearfix"> 
               <div class="item__value">${obj.value}</div> 
@@ -82,7 +137,7 @@ var uiController = (function() {
       } else {
         element = (DOMStrings.expenseList);
         html =
-          `<div class="item clearfix" id="expense-${obj.id}"> 
+          `<div class="item clearfix" id="exp-${obj.id}"> 
             <div class="item__description">${obj.description}</div> 
             <div class="right clearfix"> <div class="item__value">${obj.value}</div> 
             <div class="item__percentage">21%</div> 
@@ -96,11 +151,37 @@ var uiController = (function() {
       
       document.querySelector(element).insertAdjacentHTML('beforeend', html);
          
+    },
+    deleteListItem: function(selectorID) {
+      document.getElementById(selectorID).parentNode.removeChild( document.getElementById(selectorID));
+    },
+    showBudget: function(obj) {
+      
+      document.querySelector(DOMStrings.totalbudget).textContent = '+ '+obj.budget;
+      
+      document.querySelector(DOMStrings.totalincome).textContent = '+ '+obj.totalinc;
+      
+      document.querySelector(DOMStrings.totalexpenses).textContent = '- '+obj.totalexp;
+      
+      if(obj.totalper > 0){
+        document.querySelector(DOMStrings.totalpercentage).textContent = obj.totalper + '%';
+      }
+      else {
+        document.querySelector(DOMStrings.totalpercentage).textContent = '---';
+      }
+      
     }
   };
 })();
 
 var controller = (function(budgetCtrl, uiCtrl) {
+
+  function updateBudget() {
+    budgetCtrl.calculateBudget();
+    var budget = budgetCtrl.getBudget();
+    uiCtrl.showBudget(budget);
+  }
+
   function setupEventListeners() {
     var DOM = uiCtrl.getDOMStrings();
 
@@ -112,21 +193,44 @@ var controller = (function(budgetCtrl, uiCtrl) {
         ctrlAddItem();
       }
     });
+
+    document.querySelector(DOM.container).addEventListener('click',ctrlDelItem);
   }
 
   var ctrlAddItem = function() {
     var input = uiCtrl.getinput();
-    var newItem = budgetCtrl.addItem(
-      input.type,
-      input.description,
-      input.value
-    );
-    uiCtrl.addListItem(newItem , input.type);
+    if(input.description.trim() !== '' && !isNaN(input.value) && input.value > 0){
+      var newItem = budgetCtrl.addItem(
+        input.type,
+        input.description,
+        input.value
+      );
+      uiCtrl.addListItem(newItem , input.type);
+      uiCtrl.clearFields();
+      updateBudget();
+    }
   };
+
+  var ctrlDelItem = function(e) {
+    var itemID = e.target.parentNode.parentNode.parentNode.parentNode.id;
+    if(itemID){
+      var splitItemsID = itemID.split('-');
+      var id = splitItemsID[1];
+      var type = splitItemsID[0];
+
+      budgetCtrl.deleteItem(id,type);
+      uiCtrl.deleteListItem(itemID);
+      updateBudget();
+    }
+  }
 
   return {
     init: function() {
       console.log("Bakwaas giri start ho rahi hai abhi!!!");
+      uiCtrl.showBudget( {budget:0,
+        totalinc: 0,
+        totalexp: 0,
+        totalper: -1})
       setupEventListeners();
     }
   };
